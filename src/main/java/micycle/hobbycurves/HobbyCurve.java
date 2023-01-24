@@ -90,10 +90,10 @@ public class HobbyCurve {
 			HobbyPoint z_i = points.get(i);
 			HobbyPoint z_j = points.get((i + 1) % num_points);
 
-			A.setEntry(i, z_h.alpha / (Math.pow(z_i.beta, 2) * z_h.d_val));
-			B.setEntry(i, (3 - z_h.alpha) / (Math.pow(z_i.beta, 2) * z_h.d_val));
-			C.setEntry(i, (3 - z_j.beta) / (Math.pow(z_i.beta, 2) * z_h.d_val));
-			D.setEntry(i, z_j.beta / (Math.pow(z_i.alpha, 2) * z_i.d_val));
+			A.setEntry(i, z_h.alpha / (z_i.beta * z_i.beta * z_h.d_val));
+			B.setEntry(i, (3 - z_h.alpha) / (z_i.beta * z_i.beta * z_h.d_val));
+			C.setEntry(i, (3 - z_j.beta) / (z_i.alpha * z_i.alpha * z_i.d_val));
+			D.setEntry(i, z_j.beta / (z_i.alpha * z_i.alpha * z_i.d_val));
 			R.setEntry(i, -B.getEntry(i) * z_i.psi - D.getEntry(i) * z_j.psi);
 		}
 
@@ -115,14 +115,14 @@ public class HobbyCurve {
 			// First row of M
 			double alpha_0 = points.get(0).alpha;
 			double beta_1 = points.get(1).beta;
-			double xi_0 = (Math.pow(alpha_0, 2) * begin_curl) / Math.pow(beta_1, 2);
+			double xi_0 = (alpha_0 * alpha_0 * begin_curl) / (beta_1 * beta_1);
 			M.setEntry(0, 0, alpha_0 * xi_0 + 3 - beta_1);
 			M.setEntry(0, 1, (3 - alpha_0) * xi_0 + beta_1);
 			R.setEntry(0, -((3 - alpha_0) * xi_0 + beta_1) * points.get(1).psi);
 			// Last row of M
 			double alpha_n_1 = points.get(num_points - 2).alpha;
 			double beta_n = points.get(num_points - 1).beta;
-			double xi_n = (Math.pow(beta_n, 2) * end_curl) / Math.pow(alpha_n_1, 2);
+			double xi_n = (beta_n * beta_n * end_curl) / (alpha_n_1 * alpha_n_1);
 			M.setEntry(num_points - 1, num_points - 2, (3 - beta_n) * xi_n + alpha_n_1);
 			M.setEntry(num_points - 1, num_points - 1, (beta_n * xi_n + 3 - alpha_n_1));
 			R.setEntry(num_points - 1, 0);
@@ -153,18 +153,20 @@ public class HobbyCurve {
 		// Skip last point if path is non-cyclic
 		int end = cyclic ? num_points : num_points - 1;
 		for (int i = 0; i < end; i++) {
-			HobbyPoint z_i = points.get(i);
-			HobbyPoint z_j = points.get((i + 1) % num_points);
-			double rho_coefficient = z_i.alpha * velocity(z_i.theta, z_j.phi);
-			double sigma_coefficient = z_j.beta * velocity(z_j.phi, z_i.theta);
+			final HobbyPoint z_i = points.get(i);
+			final HobbyPoint z_j = points.get((i + 1) % num_points);
+			final double rho_coefficient = z_i.alpha * velocity(z_i.theta, z_j.phi);
+			final double sigma_coefficient = z_j.beta * velocity(z_j.phi, z_i.theta);
 
 			Complex ctrl_point_a = z_i.cmplx.add(z_j.cmplx.subtract(z_i.cmplx).multiply(rho_coefficient / 3)
 					.multiply(new Complex(Math.cos(z_i.theta), Math.sin(z_i.theta))));
 			Complex ctrl_point_b = z_j.cmplx.subtract(z_j.cmplx.subtract(z_i.cmplx).multiply(sigma_coefficient / 3)
 					.multiply(new Complex(Math.cos(-z_j.phi), Math.sin(-z_j.phi))));
-			Pair<Double, Double> p = Pair.create(ctrl_point_a.getReal(), ctrl_point_a.getImaginary());
-			ctrl_pts.add(p);
-			ctrl_pts.add(Pair.create(ctrl_point_b.getReal(), ctrl_point_b.getImaginary()));
+
+			Pair<Double, Double> pa = Pair.create(ctrl_point_a.getReal(), ctrl_point_a.getImaginary());
+			Pair<Double, Double> pb = Pair.create(ctrl_point_b.getReal(), ctrl_point_b.getImaginary());
+			ctrl_pts.add(pa);
+			ctrl_pts.add(pb);
 		}
 	}
 
