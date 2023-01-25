@@ -16,7 +16,7 @@ import org.apache.commons.math3.linear.RealVector;
  * described in the paper "Smooth, Easy to Compute Interpolating Splines" by
  * John D. Hobby.
  * <p>
- * Hobby Curves consist of a sequence of quadratic bezier curves which smootly
+ * Hobby Curves consist of a sequence of quadratic bezier curves which smoothly
  * pass through a given sequence of knots.
  * 
  * @author Michael Carleton
@@ -121,9 +121,11 @@ public class HobbyCurve {
 		return ctrlPts;
 	}
 
-	/** Calculates the pairwise distances between the knots. */
+	/**
+	 * Calculates the pairwise distances between the knots.
+	 */
 	private void calculateDVals() {
-		// Skip last point if path is non-closed
+		// Skip last point if path is open
 		int end = closed ? numPoints : numPoints - 1;
 		for (int i = 0; i < end; i++) {
 			Knot z_i = knots.get(i);
@@ -132,9 +134,11 @@ public class HobbyCurve {
 		}
 	}
 
-	/** Calculates the psi values by subtracting pairwise phases. */
+	/**
+	 * Calculates the turning angles ("psi") of the polyline which connect knots.
+	 */
 	private void calculatePsiVals() {
-		// Skip first and last point if path is non-closed
+		// Skip first and last point if path is
 		int start = closed ? 0 : 1;
 		int end = closed ? numPoints : numPoints - 1;
 		for (int i = start; i < end; i++) {
@@ -147,8 +151,8 @@ public class HobbyCurve {
 	}
 
 	/**
-	 * Calculates the theta values by creating a linear system whose solutions are
-	 * the values.
+	 * Creates five vectors which are coefficients of a linear system. Solving the
+	 * system finds the value for theta (departure angle) at each point.
 	 */
 	private void calculateThetaVals() {
 		final RealVector A = new ArrayRealVector(numPoints);
@@ -158,13 +162,13 @@ public class HobbyCurve {
 		final RealVector R = new ArrayRealVector(numPoints);
 
 		// Calculate the entries of the five vectors.
-		// Skip first and last point if path is non-closed.
+		// Skip first and last point if path is open (no connecting bezier).
 		int start = closed ? 0 : 1;
 		int end = closed ? numPoints : numPoints - 1;
 		for (int i = start; i < end; i++) {
-			Knot z_h = (i == 0 ? knots.get(numPoints - 1) : knots.get(i - 1));
-			Knot z_i = knots.get(i);
-			Knot z_j = knots.get((i + 1) % numPoints);
+			Knot z_h = (i == 0 ? knots.get(numPoints - 1) : knots.get(i - 1)); // prev
+			Knot z_i = knots.get(i); // current
+			Knot z_j = knots.get((i + 1) % numPoints); // next
 
 			A.setEntry(i, z_h.alpha / (z_i.beta * z_i.beta * z_h.distance));
 			B.setEntry(i, (3 - z_h.alpha) / (z_i.beta * z_i.beta * z_h.distance));
@@ -186,7 +190,10 @@ public class HobbyCurve {
 			M.setEntry(i, (i + 1) % numPoints, D.getEntry(i));
 		}
 
-		// Special formulas for first and last rows of M with non-closed paths.
+		/*
+		 * Special formulas for first and last rows of M (beziers having open paths),
+		 * which don't follow the general rule.
+		 */
 		if (!closed) {
 			// First row of M
 			double alpha_0 = knots.get(0).alpha;
@@ -204,7 +211,11 @@ public class HobbyCurve {
 			R.setEntry(numPoints - 1, 0);
 		}
 
-		// Solve for theta values
+		/*
+		 * Solves a linear system to find departure angles (theta) at each knot. Since
+		 * we already have turning angles each point (psi), the arrival angles (phi) can
+		 * be obtained, since theta + phi + psi = 0 at each knot.
+		 */
 		DecompositionSolver solver = new LUDecomposition(M).getSolver();
 		RealVector thetas = solver.solve(R);
 		// Assign theta values to each Knot
@@ -226,7 +237,7 @@ public class HobbyCurve {
 
 	/** Calculates the Bezier control points from z_i to z_{i+1}. */
 	private void calculateCtrlPts() {
-		int end = closed ? numPoints : numPoints - 1; // Skip last point if path is non-closed
+		int end = closed ? numPoints : numPoints - 1; // Skip last point if path is open
 		ctrlPts = new double[end * 2][2];
 		for (int i = 0; i < end; i++) {
 			final Knot z_i = knots.get(i);
@@ -250,8 +261,8 @@ public class HobbyCurve {
 		final double sinPhi = Math.sin(phi);
 		final double cosTheta = Math.cos(theta);
 		final double cosPhi = Math.cos(phi);
-		double numerator = 2 + Math.sqrt(2) * (sinTheta - (1. / 16) * sinPhi) * (sinPhi - (1. / 16) * sinTheta) * (cosTheta - cosPhi);
-		double denominator = (1 + (1. / 2) * (Math.sqrt(5) - 1) * cosTheta + (1. / 2) * (3 - Math.sqrt(5)) * cosPhi);
+		double numerator = 2 + Math.sqrt(2) * (sinTheta - sinPhi / 16) * (sinPhi - sinTheta / 16) * (cosTheta - cosPhi);
+		double denominator = (1 + (Math.sqrt(5) - 1) / 2 * cosTheta + (3 - Math.sqrt(5)) / 2 * cosPhi);
 		return numerator / denominator;
 	}
 

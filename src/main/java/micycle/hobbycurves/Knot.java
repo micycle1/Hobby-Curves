@@ -2,16 +2,25 @@ package micycle.hobbycurves;
 
 import org.apache.commons.math3.complex.Complex;
 
+/**
+ * Models a point on the curve, having auxiliary parameters about the curve
+ * passing through it.
+ */
 class Knot {
 
+	/** Knot coordinates. */
 	final Complex cmplx;
-// 	In what follows, we use Knuth's notation in our variable names
+	/** Tension of curve at this knot. */
 	double alpha = 1.0;
 	double beta = 1.0;
-	double distance = 0.0; // Distance between this point and next.
-	double theta = 0.0; // Angle of polygonal line from this point to next.
-	double phi = 0.0; // Offset angle.
-	double psi = 0.0; // Another offset angle
+	/** Distance between this and next knots. */
+	double distance = 0.0;
+	/** Curve <b>departure</b> angle at this knot. */
+	double theta = 0.0;
+	/** Curve <b>arrival</b> angle at this knot. */
+	double phi = 0.0;
+	/** Angle <b>turning</b> at this knot. */
+	double psi = 0.0;
 
 	Knot(Complex complex, double alpha, double beta) {
 		this.cmplx = complex;
