@@ -15,57 +15,100 @@ import org.apache.commons.math3.linear.RealVector;
  * Class for generating smooth interpolating splines using the algorithm
  * described in the paper "Smooth, Easy to Compute Interpolating Splines" by
  * John D. Hobby.
+ * <p>
+ * Hobby Curves consist of a sequence of quadratic bezier curves which smootly
+ * pass through a given sequence of knots.
  * 
  * @author Michael Carleton
+ * @author Luke Trujillo
  *
  */
 public class HobbyCurve {
 
 	// implements https://github.com/ltrujello/Hobby_Curve_Algorithm/
 
-	private List<HobbyPoint> points;
+	private List<Knot> knots;
+	private double[][] inputPts;
 	private double[][] ctrlPts;
-	private final boolean cyclic;
+	private final boolean closed;
 	private final double beginCurl;
 	private final double endCurl;
 	private final int numPoints;
 
 	/**
-	 * Constructor for creating a new interpolating spline ("Hobby Curve").
+	 * Constructor for creating a new "Hobby Curve".
 	 *
-	 * @param inputPoints a 2D array of x,y coordinates of the data points that the
-	 *                    curve should approximate
-	 * @param tension     a value that controls the tension of the curve "knots", it
-	 *                    should be between 0 and 1, with 0 giving a linear
-	 *                    interpolation and 1 giving a tight fit to the data points.
-	 *                    // TODO check
-	 * @param cyclic      a boolean value indicating whether the spline should be
-	 *                    cyclical / form a closed loop.
+	 * @param inputPoints a 2D array of [x, y] coordinates of the data knots that
+	 *                    the curve should pass through
+	 * @param tension     a parameter that controls the tension of the curve's
+	 *                    "knots". A value of 1 is a good starting point.
+	 * @param closed      a boolean value indicating whether the curve should form a
+	 *                    closed loop, joining the first and last knots
 	 * @param beginCurl   a value that controls the amount of curl at the start of
-	 *                    the curve
+	 *                    the curve (the bezier originating at the starting point).
+	 *                    Accepts any value, but should generally be positive; a
+	 *                    value of 1 is a good starting point. This value is only
+	 *                    effective if the curve is unclosed.
 	 * @param endCurl     a value that controls the amount of curl at the end of the
-	 *                    curve
+	 *                    curve (the bezier terminating at the final point). Accepts
+	 *                    any value, but should generally be positive; a value of 1
+	 *                    is a good starting point. This value is only effective if
+	 *                    the curve is unclosed.
 	 */
-	public HobbyCurve(double[][] inputPoints, double tension, boolean cyclic, double beginCurl, double endCurl) {
+	public HobbyCurve(double[][] inputPoints, double tension, boolean closed, double beginCurl, double endCurl) {
 		if (inputPoints.length < 2) {
-			throw new IllegalArgumentException("Hobby Algorithm needs more than two points");
+			throw new IllegalArgumentException("Hobby Algorithm needs more than two knots");
 		}
-		this.points = new ArrayList<>(inputPoints.length);
+		this.knots = new ArrayList<>(inputPoints.length);
+		this.inputPts = inputPoints;
 		for (double[] point : inputPoints) {
-			HobbyPoint new_point = new HobbyPoint(new Complex(point[0], point[1]), 1.0 / tension, 1.0 / tension);
-			points.add(new_point);
+			Knot new_point = new Knot(new Complex(point[0], point[1]), 1.0 / tension, 1.0 / tension);
+			knots.add(new_point);
 		}
-		this.cyclic = cyclic;
+		this.closed = closed;
 		this.beginCurl = beginCurl;
 		this.endCurl = endCurl;
-		this.numPoints = points.size();
+		this.numPoints = knots.size();
 	}
 
 	/**
-	 * Calculates the control points of a sequence of Bezier splines which pass
-	 * through the input points.
+	 * Returns the 4 parameters (each an (x,y) coordinate pair) of every quadratic
+	 * bezier curve comprising this Hobby Curve. Each row of the output has the
+	 * form...
+	 * <p>
+	 * <code>[ap1.x, ap1.y, cp1.x ,cp1.y, cp2.x, cp2.y, ap2.x, ap2.y]</code>
+	 * <p>
+	 * ...where <code>ap</code> denotes "anchor point" and <code>cp</code> denotes
+	 * "control point".
 	 * 
-	 * @return
+	 * @return a list of bezier curve parameters
+	 */
+	public double[][] getBeziers() {
+		getBezierCtrlPts();
+		double[][] bezierParams = new double[numPoints - (closed ? 0 : 1)][8];
+		for (int i = 0; i < bezierParams.length; i++) { // bezier between ith and i+1th point
+			double[] ap1 = inputPts[i]; // anchor point 1
+			double[] cp1 = ctrlPts[2 * i]; // control point 1
+			double[] cp2 = ctrlPts[2 * i + 1];
+			double[] ap2 = inputPts[(i + 1) % inputPts.length];
+			bezierParams[i][0] = ap1[0]; // x
+			bezierParams[i][1] = ap1[1]; // y
+			bezierParams[i][2] = cp1[0];
+			bezierParams[i][3] = cp1[1];
+			bezierParams[i][4] = cp2[0];
+			bezierParams[i][5] = cp2[1];
+			bezierParams[i][6] = ap2[0];
+			bezierParams[i][7] = ap2[1];
+		}
+		return bezierParams;
+	}
+
+	/**
+	 * Calculates the control points for each of the quadratic bezier curves
+	 * comprising this Hobby Curve. In the output, each sequential pair of (x, y)
+	 * coordinates denote the two control points of a single bezier.
+	 * 
+	 * @return 2d array of control point (x, y) coordinates
 	 */
 	public double[][] getBezierCtrlPts() {
 		if (ctrlPts == null) {
@@ -78,26 +121,26 @@ public class HobbyCurve {
 		return ctrlPts;
 	}
 
-	/** Calculates the pairwise distances between the points. */
+	/** Calculates the pairwise distances between the knots. */
 	private void calculateDVals() {
-		// Skip last point if path is non-cyclic
-		int end = cyclic ? numPoints : numPoints - 1;
+		// Skip last point if path is non-closed
+		int end = closed ? numPoints : numPoints - 1;
 		for (int i = 0; i < end; i++) {
-			HobbyPoint z_i = points.get(i);
-			HobbyPoint z_j = points.get((i + 1) % numPoints);
-			z_i.dVal = z_i.cmplx.subtract(z_j.cmplx).abs();
+			Knot z_i = knots.get(i);
+			Knot z_j = knots.get((i + 1) % numPoints);
+			z_i.distance = z_i.cmplx.subtract(z_j.cmplx).abs();
 		}
 	}
 
 	/** Calculates the psi values by subtracting pairwise phases. */
 	private void calculatePsiVals() {
-		// Skip first and last point if path is non-cyclic
-		int start = cyclic ? 0 : 1;
-		int end = cyclic ? numPoints : numPoints - 1;
+		// Skip first and last point if path is non-closed
+		int start = closed ? 0 : 1;
+		int end = closed ? numPoints : numPoints - 1;
 		for (int i = start; i < end; i++) {
-			HobbyPoint z_h = (i == 0 ? points.get(numPoints - 1) : points.get(i - 1));
-			HobbyPoint z_i = points.get(i);
-			HobbyPoint z_j = points.get((i + 1) % numPoints);
+			Knot z_h = (i == 0 ? knots.get(numPoints - 1) : knots.get(i - 1));
+			Knot z_i = knots.get(i);
+			Knot z_j = knots.get((i + 1) % numPoints);
 			Complex polygonal_turn = z_j.cmplx.subtract(z_i.cmplx).divide(z_i.cmplx.subtract(z_h.cmplx));
 			z_i.psi = Math.atan2(polygonal_turn.getImaginary(), polygonal_turn.getReal());
 		}
@@ -115,18 +158,18 @@ public class HobbyCurve {
 		final RealVector R = new ArrayRealVector(numPoints);
 
 		// Calculate the entries of the five vectors.
-		// Skip first and last point if path is non-cyclic.
-		int start = cyclic ? 0 : 1;
-		int end = cyclic ? numPoints : numPoints - 1;
+		// Skip first and last point if path is non-closed.
+		int start = closed ? 0 : 1;
+		int end = closed ? numPoints : numPoints - 1;
 		for (int i = start; i < end; i++) {
-			HobbyPoint z_h = (i == 0 ? points.get(numPoints - 1) : points.get(i - 1));
-			HobbyPoint z_i = points.get(i);
-			HobbyPoint z_j = points.get((i + 1) % numPoints);
+			Knot z_h = (i == 0 ? knots.get(numPoints - 1) : knots.get(i - 1));
+			Knot z_i = knots.get(i);
+			Knot z_j = knots.get((i + 1) % numPoints);
 
-			A.setEntry(i, z_h.alpha / (z_i.beta * z_i.beta * z_h.dVal));
-			B.setEntry(i, (3 - z_h.alpha) / (z_i.beta * z_i.beta * z_h.dVal));
-			C.setEntry(i, (3 - z_j.beta) / (z_i.alpha * z_i.alpha * z_i.dVal));
-			D.setEntry(i, z_j.beta / (z_i.alpha * z_i.alpha * z_i.dVal));
+			A.setEntry(i, z_h.alpha / (z_i.beta * z_i.beta * z_h.distance));
+			B.setEntry(i, (3 - z_h.alpha) / (z_i.beta * z_i.beta * z_h.distance));
+			C.setEntry(i, (3 - z_j.beta) / (z_i.alpha * z_i.alpha * z_i.distance));
+			D.setEntry(i, z_j.beta / (z_i.alpha * z_i.alpha * z_i.distance));
 			R.setEntry(i, -B.getEntry(i) * z_i.psi - D.getEntry(i) * z_j.psi);
 		}
 
@@ -143,18 +186,18 @@ public class HobbyCurve {
 			M.setEntry(i, (i + 1) % numPoints, D.getEntry(i));
 		}
 
-		// Special formulas for first and last rows of M with non-cyclic paths.
-		if (!cyclic) {
+		// Special formulas for first and last rows of M with non-closed paths.
+		if (!closed) {
 			// First row of M
-			double alpha_0 = points.get(0).alpha;
-			double beta_1 = points.get(1).beta;
+			double alpha_0 = knots.get(0).alpha;
+			double beta_1 = knots.get(1).beta;
 			double xi_0 = (alpha_0 * alpha_0 * beginCurl) / (beta_1 * beta_1);
 			M.setEntry(0, 0, alpha_0 * xi_0 + 3 - beta_1);
 			M.setEntry(0, 1, (3 - alpha_0) * xi_0 + beta_1);
-			R.setEntry(0, -((3 - alpha_0) * xi_0 + beta_1) * points.get(1).psi);
+			R.setEntry(0, -((3 - alpha_0) * xi_0 + beta_1) * knots.get(1).psi);
 			// Last row of M
-			double alpha_n_1 = points.get(numPoints - 2).alpha;
-			double beta_n = points.get(numPoints - 1).beta;
+			double alpha_n_1 = knots.get(numPoints - 2).alpha;
+			double beta_n = knots.get(numPoints - 1).beta;
 			double xi_n = (beta_n * beta_n * endCurl) / (alpha_n_1 * alpha_n_1);
 			M.setEntry(numPoints - 1, numPoints - 2, (3 - beta_n) * xi_n + alpha_n_1);
 			M.setEntry(numPoints - 1, numPoints - 1, (beta_n * xi_n + 3 - alpha_n_1));
@@ -164,9 +207,9 @@ public class HobbyCurve {
 		// Solve for theta values
 		DecompositionSolver solver = new LUDecomposition(M).getSolver();
 		RealVector thetas = solver.solve(R);
-		// Assign theta values to each HobbyPoint
+		// Assign theta values to each Knot
 		for (int i = 0; i < numPoints; i++) {
-			points.get(i).theta = thetas.getEntry(i);
+			knots.get(i).theta = thetas.getEntry(i);
 		}
 
 	}
@@ -176,18 +219,18 @@ public class HobbyCurve {
 	 * <code>theta_k + phi_k + psi_k = 0</code>.
 	 */
 	private void calculatePhiVals() {
-		for (HobbyPoint point : points) {
+		for (Knot point : knots) {
 			point.phi = -(point.psi + point.theta);
 		}
 	}
 
 	/** Calculates the Bezier control points from z_i to z_{i+1}. */
 	private void calculateCtrlPts() {
-		int end = cyclic ? numPoints : numPoints - 1; // Skip last point if path is non-cyclic
-		ctrlPts = new double[(numPoints - 1) * 2][2];
+		int end = closed ? numPoints : numPoints - 1; // Skip last point if path is non-closed
+		ctrlPts = new double[end * 2][2];
 		for (int i = 0; i < end; i++) {
-			final HobbyPoint z_i = points.get(i);
-			final HobbyPoint z_j = points.get((i + 1) % numPoints);
+			final Knot z_i = knots.get(i);
+			final Knot z_j = knots.get((i + 1) % numPoints);
 			final double rho_coefficient = z_i.alpha * velocity(z_i.theta, z_j.phi);
 			final double sigma_coefficient = z_j.beta * velocity(z_j.phi, z_i.theta);
 
