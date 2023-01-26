@@ -3,13 +3,14 @@ package micycle.hobbycurves;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.math3.complex.Complex;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.ArrayRealVector;
 import org.apache.commons.math3.linear.DecompositionSolver;
 import org.apache.commons.math3.linear.LUDecomposition;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
+
+import micycle.hobbycurves.Knot.Coordinate;
 
 /**
  * Class for generating smooth interpolating splines using the algorithm
@@ -61,7 +62,7 @@ public class HobbyCurve {
 		}
 		this.knots = new ArrayList<>(inputPoints.length);
 		for (double[] point : inputPoints) {
-			Knot knot = new Knot(new Complex(point[0], point[1]), 1.0 / tension, 1.0 / tension);
+			Knot knot = new Knot(new Coordinate(point[0], point[1]), 1.0 / tension, 1.0 / tension);
 			knots.add(knot);
 		}
 		this.closed = closed;
@@ -103,7 +104,7 @@ public class HobbyCurve {
 		for (int i = 0; i < inputPoints.length; i++) {
 			double[] point = inputPoints[i];
 			double tension = tensions[i];
-			Knot knot = new Knot(new Complex(point[0], point[1]), 1.0 / tension, 1.0 / tension);
+			Knot knot = new Knot(new Coordinate(point[0], point[1]), 1.0 / tension, 1.0 / tension);
 			knots.add(knot);
 		}
 		this.closed = closed;
@@ -144,7 +145,9 @@ public class HobbyCurve {
 		for (int i = 0; i < end; i++) {
 			Knot a = knots.get(i);
 			Knot b = knots.get((i + 1) % numPoints);
-			a.distance = a.cmplx.subtract(b.cmplx).abs();
+			a.distance = a.c.dist(b.c);
+			a.deltaX = b.c.x - a.c.x;
+			a.deltaY = b.c.y - a.c.y;
 		}
 	}
 
@@ -156,11 +159,12 @@ public class HobbyCurve {
 		int start = closed ? 0 : 1;
 		int end = closed ? numPoints : numPoints - 1;
 		for (int i = start; i < end; i++) {
-			Knot z_h = (i == 0 ? knots.get(numPoints - 1) : knots.get(i - 1));
-			Knot z_i = knots.get(i);
-			Knot z_j = knots.get((i + 1) % numPoints);
-			Complex polygonal_turn = z_j.cmplx.subtract(z_i.cmplx).divide(z_i.cmplx.subtract(z_h.cmplx));
-			z_i.psi = Math.atan2(polygonal_turn.getImaginary(), polygonal_turn.getReal());
+			Knot prevKnot = knots.get(Math.floorMod(i - 1, numPoints));
+			Knot knot = knots.get(i);
+			double sin = prevKnot.deltaY / prevKnot.distance;
+			double cos = prevKnot.deltaX / prevKnot.distance;
+
+			knot.psi = Math.atan2(knot.deltaY * cos - knot.deltaX * sin, knot.deltaX * cos + knot.deltaY * sin);
 		}
 	}
 
@@ -262,20 +266,18 @@ public class HobbyCurve {
 			final double rho = a.alpha * velocity(a.theta, b.phi); // coefficient
 			final double sigma = b.beta * velocity(b.phi, a.theta); // coefficient
 
-			Complex cp1 = a.cmplx
-					.add(b.cmplx.subtract(a.cmplx).multiply(rho / 3).multiply(new Complex(Math.cos(a.theta), Math.sin(a.theta))));
-			Complex cp2 = b.cmplx
-					.subtract(b.cmplx.subtract(a.cmplx).multiply(sigma / 3).multiply(new Complex(Math.cos(-b.phi), Math.sin(-b.phi))));
+			Coordinate cp1 = a.c.add(b.c.sub(a.c).mult(rho / 3).mult(new Coordinate(Math.cos(a.theta), Math.sin(a.theta))));
+			Coordinate cp2 = b.c.sub(b.c.sub(a.c).mult(sigma / 3).mult(new Coordinate(Math.cos(-b.phi), Math.sin(-b.phi))));
 
 			int j = 0;
-			bezierParams[i][j++] = a.cmplx.getReal();
-			bezierParams[i][j++] = a.cmplx.getImaginary();
-			bezierParams[i][j++] = cp1.getReal();
-			bezierParams[i][j++] = cp1.getImaginary();
-			bezierParams[i][j++] = cp2.getReal();
-			bezierParams[i][j++] = cp2.getImaginary();
-			bezierParams[i][j++] = b.cmplx.getReal();
-			bezierParams[i][j++] = b.cmplx.getImaginary();
+			bezierParams[i][j++] = a.c.x;
+			bezierParams[i][j++] = a.c.y;
+			bezierParams[i][j++] = cp1.x;
+			bezierParams[i][j++] = cp1.y;
+			bezierParams[i][j++] = cp2.x;
+			bezierParams[i][j++] = cp2.y;
+			bezierParams[i][j++] = b.c.x;
+			bezierParams[i][j++] = b.c.y;
 		}
 	}
 
