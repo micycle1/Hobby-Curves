@@ -24,7 +24,7 @@ import micycle.hobbycurves.Knot.Coordinate;
  * @author Luke Trujillo
  *
  */
-public class HobbyCurve {
+public class HobbyCurve implements IHobbyCurve {
 
 	// implements https://github.com/ltrujello/Hobby_Curve_Algorithm/
 	// https://tex.stackexchange.com/questions/54771/curve-through-a-sequence-of-points-with-metapost-and-tikz
