@@ -8,7 +8,7 @@ John Hobby’s algorithm [[1]] produces a smooth curve through a given set of po
 
 Hobby Curves are more visually pleasing than curves produced via most other techniques.
 
-This Java implementation is based on _Luke Trujillo's_ C++ [implementation](https://github.com/ltrujello/Hobby_Curve_Algorithm]).
+This Java implementation is based on _Luke Trujillo's_ C++ [implementation](https://github.com/ltrujello/Hobby_Curve_Algorithm).
 
 ## Example
 
@@ -30,8 +30,5 @@ for (double[] bezier : curve.getBeziers()) {
 	System.out.println(Arrays.toString(bezier));
 }
 ```
-
-https://mirror.apps.cam.ac.uk/pub/tex-archive/graphics/pgf/contrib/hobby/hobby_code.pdf
-http://ctan.math.utah.edu/ctan/tex-archive/graphics/pgf/contrib/hobby/hobby.pdf
 
 [1]: https://www.researchgate.net/publication/226514776_Smooth_easy_to_compute_interpolating_splines

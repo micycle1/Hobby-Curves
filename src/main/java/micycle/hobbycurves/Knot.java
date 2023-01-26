@@ -15,11 +15,11 @@ class Knot {
 	double beta = 1.0;
 	/** Distance between this and next knots. */
 	double distance = 0.0;
-	/** Curve <b>departure</b> angle at this knot. */
+	/** Curve <b>departure</b> angle (radians) at this knot. */
 	double theta = 0.0;
-	/** Curve <b>arrival</b> angle at this knot. */
+	/** Curve <b>arrival</b> angle (radians) at this knot. */
 	double phi = 0.0;
-	/** Angle <b>turning</b> at this knot. */
+	/** Curve <b>turning</b> angle (radians) at this knot. */
 	double psi = 0.0;
 
 	Knot(Complex complex, double alpha, double beta) {
