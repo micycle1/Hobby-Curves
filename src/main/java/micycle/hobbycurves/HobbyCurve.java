@@ -27,7 +27,6 @@ import micycle.hobbycurves.Knot.Coordinate;
 public class HobbyCurve implements IHobbyCurve {
 
 	// implements https://github.com/ltrujello/Hobby_Curve_Algorithm/
-	// https://tex.stackexchange.com/questions/54771/curve-through-a-sequence-of-points-with-metapost-and-tikz
 
 	private List<Knot> knots;
 	private double[][] bezierParams;
@@ -39,29 +38,29 @@ public class HobbyCurve implements IHobbyCurve {
 	/**
 	 * Constructor for creating a new "Hobby Curve".
 	 *
-	 * @param inputPoints a 2D array of [x, y] coordinates of the data knots that
-	 *                    the curve should pass through.
-	 * @param tension     a parameter that controls the tension of the curve's
-	 *                    "knots". A value of 1 is a good starting point.
-	 * @param closed      a boolean value indicating whether the curve should form a
-	 *                    closed loop, joining the first and last knots
-	 * @param beginCurl   a value that controls the amount of curl at the start of
-	 *                    the curve (the angle of incoming bezier originating at the
-	 *                    starting point). Accepts any value, but should generally
-	 *                    be positive; a value of 1 is a good starting point. This
-	 *                    value is only effective if the curve is unclosed.
-	 * @param endCurl     a value that controls the amount of curl at the end of the
-	 *                    curve (the angle out outgoing bezier terminating at the
-	 *                    final point). Accepts any value, but should generally be
-	 *                    positive; a value of 1 is a good starting point. This
-	 *                    value is only effective if the curve is unclosed.
+	 * @param inputKnots a 2D array of [x, y] coordinates of the data knots that the
+	 *                   curve should pass through.
+	 * @param tension    a parameter that controls the tension of the curve's
+	 *                   "knots". A value of 1 is a good starting point.
+	 * @param closed     a boolean value indicating whether the curve should form a
+	 *                   closed loop, joining the first and last knots
+	 * @param beginCurl  a value that controls the amount of curl at the start of
+	 *                   the curve (the angle of incoming bezier originating at the
+	 *                   starting point). Accepts any value, but should generally be
+	 *                   positive; a value of 1 is a good starting point. This value
+	 *                   is only effective if the curve is unclosed.
+	 * @param endCurl    a value that controls the amount of curl at the end of the
+	 *                   curve (the angle out outgoing bezier terminating at the
+	 *                   final point). Accepts any value, but should generally be
+	 *                   positive; a value of 1 is a good starting point. This value
+	 *                   is only effective if the curve is unclosed.
 	 */
-	public HobbyCurve(double[][] inputPoints, double tension, boolean closed, double beginCurl, double endCurl) {
-		if (inputPoints.length < 2) {
+	public HobbyCurve(double[][] inputKnots, double tension, boolean closed, double beginCurl, double endCurl) {
+		if (inputKnots.length < 2) {
 			throw new IllegalArgumentException("Hobby Algorithm needs more than two knots");
 		}
-		this.knots = new ArrayList<>(inputPoints.length);
-		for (double[] point : inputPoints) {
+		this.knots = new ArrayList<>(inputKnots.length);
+		for (double[] point : inputKnots) {
 			Knot knot = new Knot(new Coordinate(point[0], point[1]), 1.0 / tension, 1.0 / tension);
 			knots.add(knot);
 		}
@@ -75,34 +74,34 @@ public class HobbyCurve implements IHobbyCurve {
 	 * Constructor for creating a new "Hobby Curve", where tension is specified per
 	 * knot.
 	 *
-	 * @param inputPoints a 2D array of [x, y] coordinates of the data knots that
-	 *                    the curve should pass through.
-	 * @param tensions    a list of tension parameters that control the tension of
-	 *                    the curve at each corresponding knots. A value of 1 is a
-	 *                    good starting point.
-	 * @param closed      a boolean value indicating whether the curve should form a
-	 *                    closed loop, joining the first and last knots
-	 * @param beginCurl   a value that controls the amount of curl at the start of
-	 *                    the curve (the angle of incoming bezier originating at the
-	 *                    starting point). Accepts any value, but should generally
-	 *                    be positive; a value of 1 is a good starting point. This
-	 *                    value is only effective if the curve is unclosed.
-	 * @param endCurl     a value that controls the amount of curl at the end of the
-	 *                    curve (the angle out outgoing bezier terminating at the
-	 *                    final point). Accepts any value, but should generally be
-	 *                    positive; a value of 1 is a good starting point. This
-	 *                    value is only effective if the curve is unclosed.
+	 * @param inputKnots a 2D array of [x, y] coordinates of the data knots that the
+	 *                   curve should pass through.
+	 * @param tensions   a list of tension parameters that control the tension of
+	 *                   the curve at each corresponding knots. A value of 1 is a
+	 *                   good starting point.
+	 * @param closed     a boolean value indicating whether the curve should form a
+	 *                   closed loop, joining the first and last knots
+	 * @param beginCurl  a value that controls the amount of curl at the start of
+	 *                   the curve (the angle of incoming bezier originating at the
+	 *                   starting point). Accepts any value, but should generally be
+	 *                   positive; a value of 1 is a good starting point. This value
+	 *                   is only effective if the curve is unclosed.
+	 * @param endCurl    a value that controls the amount of curl at the end of the
+	 *                   curve (the angle out outgoing bezier terminating at the
+	 *                   final point). Accepts any value, but should generally be
+	 *                   positive; a value of 1 is a good starting point. This value
+	 *                   is only effective if the curve is unclosed.
 	 */
-	public HobbyCurve(double[][] inputPoints, double[] tensions, boolean closed, double beginCurl, double endCurl) {
-		if (inputPoints.length < 2) {
+	public HobbyCurve(double[][] inputKnots, double[] tensions, boolean closed, double beginCurl, double endCurl) {
+		if (inputKnots.length < 2) {
 			throw new IllegalArgumentException("Hobby Algorithm needs more than two knots");
 		}
-		if (inputPoints.length != tensions.length) {
+		if (inputKnots.length != tensions.length) {
 			throw new IllegalArgumentException("Points and tensions arrays are different sizes. They should be equal.");
 		}
-		this.knots = new ArrayList<>(inputPoints.length);
-		for (int i = 0; i < inputPoints.length; i++) {
-			double[] point = inputPoints[i];
+		this.knots = new ArrayList<>(inputKnots.length);
+		for (int i = 0; i < inputKnots.length; i++) {
+			double[] point = inputKnots[i];
 			double tension = tensions[i];
 			Knot knot = new Knot(new Coordinate(point[0], point[1]), 1.0 / tension, 1.0 / tension);
 			knots.add(knot);
@@ -113,18 +112,6 @@ public class HobbyCurve implements IHobbyCurve {
 		this.numPoints = knots.size();
 	}
 
-	/**
-	 * Returns the 4 parameters (each an (x,y) coordinate pair) of every cubic
-	 * bezier curve comprising this Hobby Curve. Each row of the output has the
-	 * form...
-	 * <p>
-	 * <code>[ap1.x, ap1.y, cp1.x ,cp1.y, cp2.x, cp2.y, ap2.x, ap2.y]</code>
-	 * <p>
-	 * ...where <code>ap</code> denotes "anchor point" and <code>cp</code> denotes
-	 * "control point".
-	 * 
-	 * @return a list of bezier curve parameters
-	 */
 	public double[][] getBeziers() {
 		if (bezierParams == null) {
 			calculateDVals();
