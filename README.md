@@ -10,6 +10,9 @@ John Hobby’s algorithm [[1]] produces a smooth curve through a given set of po
 
 This Java library implements both variants of the Hobby Curve: the original "global" algorithm (implementation based on _Luke Trujillo's_ C++ [implementation](https://github.com/ltrujello/Hobby_Curve_Algorithm)) and an incremental variant (implementation based on _loopspace's_ js [implementation](https://github.com/loopspace/jsHobby)).
 
+The global solver keeps the same mathematical formulation as Luke Trujillo’s version, but the linear-system step has been rewritten to use a specialised O(n) tridiagonal / cyclic-tridiagonal solver instead of a general LU decomposition.
+In practice this reduces the running time from cubic to linear in the number of knots and removes almost all intermediate allocations, so large curves are generated markedly faster while producing identical results.
+
 ## Gallery
 
 <table>

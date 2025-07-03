@@ -3,13 +3,6 @@ package micycle.hobbycurves;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.math3.linear.Array2DRowRealMatrix;
-import org.apache.commons.math3.linear.ArrayRealVector;
-import org.apache.commons.math3.linear.DecompositionSolver;
-import org.apache.commons.math3.linear.LUDecomposition;
-import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.commons.math3.linear.RealVector;
-
 import micycle.hobbycurves.Knot.Coordinate;
 
 /**
@@ -21,12 +14,11 @@ import micycle.hobbycurves.Knot.Coordinate;
  * through a given sequence of knots.
  * 
  * @author Michael Carleton
- * @author Luke Trujillo
  *
  */
 public class HobbyCurve implements IHobbyCurve {
 
-	// implements https://github.com/ltrujello/Hobby_Curve_Algorithm/
+	// based on https://github.com/ltrujello/Hobby_Curve_Algorithm/
 
 	private List<Knot> knots;
 	private double[][] bezierParams;
@@ -155,83 +147,119 @@ public class HobbyCurve implements IHobbyCurve {
 		}
 	}
 
-	/**
-	 * Creates five vectors which are coefficients of a linear system. Solving the
-	 * system finds the value for theta (departure angle) at each point.
-	 */
+	/** Original Hobby algorithm, but with O(n) linear solver. */
 	private void calculateThetaVals() {
-		/*
-		 * Arrays holding the subdiagonals of the linear system that has to be solved to
-		 * find the angles of the control points.
-		 */
-		final RealVector A = new ArrayRealVector(numPoints);
-		final RealVector B = new ArrayRealVector(numPoints);
-		final RealVector C = new ArrayRealVector(numPoints);
-		final RealVector D = new ArrayRealVector(numPoints);
-		final RealVector R = new ArrayRealVector(numPoints);
 
-		// Calculate the entries of the five vectors.
-		// Skip first and last point if path is open (no connecting bezier).
-		int start = closed ? 0 : 1;
-		int end = closed ? numPoints : numPoints - 1;
+		final int n = numPoints;
+		final boolean cyc = closed;
+
+		/* --- build the three diagonals and the right–hand side ------------- */
+
+		double[] low = new double[n]; // a_{i, i-1}
+		double[] diag = new double[n]; // a_{i, i}
+		double[] up = new double[n]; // a_{i, i+1}
+		double[] rhs = new double[n];
+
+		int start = cyc ? 0 : 1;
+		int end = cyc ? n : n - 1;
+
 		for (int i = start; i < end; i++) {
-			Knot z_h = (i == 0 ? knots.get(numPoints - 1) : knots.get(i - 1)); // prev
-			Knot z_i = knots.get(i); // current
-			Knot z_j = knots.get((i + 1) % numPoints); // next
+			Knot zh = knots.get(Math.floorMod(i - 1, n));
+			Knot zi = knots.get(i);
+			Knot zj = knots.get((i + 1) % n);
 
-			A.setEntry(i, z_h.alpha / (z_i.beta * z_i.beta * z_h.distance));
-			B.setEntry(i, (3 - z_h.alpha) / (z_i.beta * z_i.beta * z_h.distance));
-			C.setEntry(i, (3 - z_j.beta) / (z_i.alpha * z_i.alpha * z_i.distance));
-			D.setEntry(i, z_j.beta / (z_i.alpha * z_i.alpha * z_i.distance));
-			R.setEntry(i, -B.getEntry(i) * z_i.psi - D.getEntry(i) * z_j.psi);
+			double A = zh.alpha / (zi.beta * zi.beta * zh.distance);
+			double B = (3 - zh.alpha) / (zi.beta * zi.beta * zh.distance);
+			double C = (3 - zj.beta) / (zi.alpha * zi.alpha * zi.distance);
+			double D = zj.beta / (zi.alpha * zi.alpha * zi.distance);
+
+			low[i] = A;
+			diag[i] = B + C;
+			up[i] = D;
+			rhs[i] = -B * zi.psi - D * zj.psi;
 		}
 
-		RealMatrix M = new Array2DRowRealMatrix(numPoints, numPoints);
-		// Set up matrix M such that the soln. Mx = R are the theta values.
-		for (int i = start; i < end; i++) {
-			// Fill i-th row of M
-			if (i == 0) {
-				M.setEntry(i, numPoints - 1, A.getEntry(i));
-			} else {
-				M.setEntry(i, i - 1, A.getEntry(i));
-			}
-			M.setEntry(i, i, B.getEntry(i) + C.getEntry(i));
-			M.setEntry(i, (i + 1) % numPoints, D.getEntry(i));
+		/* --- special first / last rows for the open case -------------------- */
+		if (!cyc) {
+			Knot z0 = knots.get(0), z1 = knots.get(1);
+			double xi0 = (z0.alpha * z0.alpha * beginCurl) / (z1.beta * z1.beta);
+
+			diag[0] = z0.alpha * xi0 + 3 - z1.beta;
+			up[0] = (3 - z0.alpha) * xi0 + z1.beta;
+			rhs[0] = -up[0] * z1.psi;
+
+			Knot zn_1 = knots.get(n - 2), zn = knots.get(n - 1);
+			double xin = (zn.beta * zn.beta * endCurl) / (zn_1.alpha * zn_1.alpha);
+
+			low[n - 1] = (3 - zn.beta) * xin + zn_1.alpha;
+			diag[n - 1] = zn.beta * xin + 3 - zn_1.alpha;
+			// rhs[n-1] is already 0
 		}
 
-		/*
-		 * Special formulas for first and last rows of M (beziers having open paths),
-		 * which don't follow the general rule.
-		 */
-		if (!closed) {
-			// First row of M
-			double alpha_0 = knots.get(0).alpha;
-			double beta_1 = knots.get(1).beta;
-			double xi_0 = (alpha_0 * alpha_0 * beginCurl) / (beta_1 * beta_1);
-			M.setEntry(0, 0, alpha_0 * xi_0 + 3 - beta_1);
-			M.setEntry(0, 1, (3 - alpha_0) * xi_0 + beta_1);
-			R.setEntry(0, -((3 - alpha_0) * xi_0 + beta_1) * knots.get(1).psi);
-			// Last row of M
-			double alpha_n_1 = knots.get(numPoints - 2).alpha;
-			double beta_n = knots.get(numPoints - 1).beta;
-			double xi_n = (beta_n * beta_n * endCurl) / (alpha_n_1 * alpha_n_1);
-			M.setEntry(numPoints - 1, numPoints - 2, (3 - beta_n) * xi_n + alpha_n_1);
-			M.setEntry(numPoints - 1, numPoints - 1, (beta_n * xi_n + 3 - alpha_n_1));
-			R.setEntry(numPoints - 1, 0);
+		// solve
+		double[] theta = cyc ? solveCyclic(low, diag, up, rhs) : solveTri(low, diag, up, rhs);
+
+		for (int i = 0; i < n; i++) {
+			knots.get(i).theta = theta[i];
+		}
+	}
+
+	/**
+	 * /** Solve a×x = d where 'a' is tridiagonal (open curve).
+	 */
+	private static double[] solveTri(double[] low, double[] diag, double[] up, double[] rhs) {
+
+		int n = diag.length;
+
+		// Forward sweep -------------------------------------------------
+		for (int i = 1; i < n; i++) {
+			double m = low[i] / diag[i - 1];
+			diag[i] -= m * up[i - 1];
+			rhs[i] -= m * rhs[i - 1];
 		}
 
-		/*
-		 * Solves a linear system to find departure angles (theta) at each knot. Since
-		 * we already have turning angles each point (psi), the arrival angles (phi) can
-		 * be obtained, since theta + phi + psi = 0 at each knot.
-		 */
-		DecompositionSolver solver = new LUDecomposition(M).getSolver();
-		RealVector thetas = solver.solve(R);
-		// Assign theta values to each Knot
-		for (int i = 0; i < numPoints; i++) {
-			knots.get(i).theta = thetas.getEntry(i);
-		}
+		// Back substitution --------------------------------------------
+		double[] x = new double[n];
+		x[n - 1] = rhs[n - 1] / diag[n - 1];
 
+		for (int i = n - 2; i >= 0; i--) {
+			x[i] = (rhs[i] - up[i] * x[i + 1]) / diag[i];
+		}
+		return x;
+	}
+
+	/** Solve cyclic tridiagonal system (closed curve). */
+	private static double[] solveCyclic(double[] low, double[] diag, double[] up, double[] rhs) {
+
+		int n = diag.length;
+		double[] u = new double[n];
+		double[] v = new double[n];
+
+		// u = [gamma, 0, 0, …, beta]
+		double gamma = -diag[0]; // any non–zero number is fine
+		u[0] = gamma;
+		u[n - 1] = low[0];
+
+		v[0] = 1.0;
+		v[n - 1] = up[n - 1] / gamma;
+
+		// Modify first and last diagonal entries
+		double[] diag2 = diag.clone();
+		diag2[0] -= gamma;
+		diag2[n - 1] -= up[n - 1] * low[0] / gamma;
+
+		// Solve two ordinary tridiagonal systems
+		double[] y = solveTri(low, diag2, up, rhs.clone());
+		double[] z = solveTri(low, diag2, up, u);
+
+		// Combine with Sherman–Morrison
+		double fact = (y[0] + up[n - 1] * y[n - 1] / gamma) / (1.0 + v[0] + up[n - 1] * z[n - 1] / gamma);
+
+		double[] x = new double[n];
+		for (int i = 0; i < n; i++) {
+			x[i] = y[i] - fact * z[i];
+		}
+		return x;
 	}
 
 	/**
